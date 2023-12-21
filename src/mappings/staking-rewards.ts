@@ -137,6 +137,10 @@ export function handleDistributionCancelation(event: Canceled): void {
   factory.save()
 
   let canceledDistribution = LiquidityMiningCampaign.load(event.address.toHexString())
+  if (canceledDistribution == null) {
+    log.error('Liquidity mining campaign doesnt exist', []);
+    return;
+  }
   canceledDistribution.initialized = false
   canceledDistribution.save()
 }
