@@ -1,6 +1,6 @@
 /* eslint-disable prefer-const */
 import { Pair, Token, Bundle } from '../types/schema'
-import { BigDecimal, BigInt, dataSource } from '@graphprotocol/graph-ts/index'
+import { BigDecimal, BigInt, dataSource, log } from '@graphprotocol/graph-ts/index'
 import { ZERO_BD, ONE_BD } from './helpers'
 import {
   getDaiNativeCurrencyWrapperPairAddress,
@@ -62,7 +62,7 @@ export function getNativeCurrencyPriceInUSD(): BigDecimal {
  * Search through graph to find derived native currency per token.
  * @todo update to be derived native currency (add stablecoin estimates)
  **/
-export function findNativeCurrencyPerToken(token: Token): BigDecimal {
+export function findNativeCurrencyPerToken(token: Token): BigDecimal | null {
   if (token.id == getNativeCurrencyWrapperAddress()) {
     return ONE_BD
   }
@@ -71,12 +71,24 @@ export function findNativeCurrencyPerToken(token: Token): BigDecimal {
   for (let i = 0; i < whitelist.length; i++) {
     let pairAddress = whitelist[i]
     let pair = Pair.load(pairAddress)
+    if (pair === null) {
+      log.error('Pair not found for address {}', [pairAddress])
+      return null
+    }
     if (pair.token0 == token.id && pair.reserveNativeCurrency.gt(getMinimumLiquidityThresholdNativeCurrency())) {
       let token1 = Token.load(pair.token1)
+      if (token1 === null) {
+        log.error('Token not found for pair {}', [pair.id])
+        return null
+      }
       return pair.token1Price.times(token1.derivedNativeCurrency as BigDecimal) // return token1 per our token * native currency per token 1
     }
     if (pair.token1 == token.id && pair.reserveNativeCurrency.gt(getMinimumLiquidityThresholdNativeCurrency())) {
       let token0 = Token.load(pair.token0)
+      if (token0 === null) {
+        log.error('Token not found for pair {}', [pair.id])
+        return null
+      }
       return pair.token0Price.times(token0.derivedNativeCurrency as BigDecimal) // return token0 per our token * native currency per token 0
     }
   }
@@ -95,8 +107,16 @@ export function getTrackedVolumeUSD(
   tokenAmount1: BigDecimal,
   token1: Token,
   pair: Pair
-): BigDecimal {
+): BigDecimal | null {
   let bundle = Bundle.load('1')
+  if (bundle === null) {
+    log.error('Bundle not found', [])
+    return null
+  }
+  if (token1.derivedNativeCurrency === null || token0.derivedNativeCurrency === null) {
+    log.error('token derivedNativeCurrency not found', [])
+    return null
+  }
   let price0 = token0.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
   let price1 = token1.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
 
@@ -155,8 +175,16 @@ export function getTrackedLiquidityUSD(
   token0: Token,
   tokenAmount1: BigDecimal,
   token1: Token
-): BigDecimal {
+): BigDecimal | null {
   let bundle = Bundle.load('1')
+  if (bundle === null) {
+    log.error('Bundle not found', [])
+    return null
+  }
+  if (token1.derivedNativeCurrency === null || token0.derivedNativeCurrency === null) {
+    log.error('token derivedNativeCurrency not found', [])
+    return null
+  }
   let price0 = token0.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
   let price1 = token1.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
 
