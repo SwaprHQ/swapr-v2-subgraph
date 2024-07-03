@@ -159,11 +159,16 @@ export function createLiquidityPosition(exchange: Address, user: Address): Liqui
     .concat('-')
     .concat(user.toHexString())
   let liquidityTokenBalance = LiquidityPosition.load(id)
-  if (liquidityTokenBalance === null) {
+  if (liquidityTokenBalance == null) {
     let pair = Pair.load(exchange.toHexString())
     if (pair == null) {
       log.error('Pair not found for exchange {}', [exchange.toHexString()])
-      return new LiquidityPosition(id)
+      let newPosition = new LiquidityPosition(id)
+      newPosition.liquidityTokenBalance = ZERO_BD
+      newPosition.pair = exchange.toHexString()
+      newPosition.user = user.toHexString()
+      newPosition.save()
+      return newPosition
     }
     pair.liquidityProviderCount = pair.liquidityProviderCount.plus(ONE_BI)
     liquidityTokenBalance = new LiquidityPosition(id)
@@ -173,10 +178,19 @@ export function createLiquidityPosition(exchange: Address, user: Address): Liqui
     liquidityTokenBalance.save()
     pair.save()
   }
-  if (liquidityTokenBalance === null) log.error('LiquidityTokenBalance is null', [id])
-  return liquidityTokenBalance as LiquidityPosition
-}
 
+  if (liquidityTokenBalance == null) {
+    log.error('LiquidityTokenBalance is null', [id])
+    let newPosition = new LiquidityPosition(id)
+    newPosition.liquidityTokenBalance = ZERO_BD
+    newPosition.pair = exchange.toHexString()
+    newPosition.user = user.toHexString()
+    newPosition.save()
+    return newPosition
+  }
+
+  return liquidityTokenBalance
+}
 export function getOrCreateLiquidityMiningPosition(
   campaign: LiquidityMiningCampaign,
   pair: Pair,
