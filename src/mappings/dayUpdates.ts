@@ -118,24 +118,25 @@ export function updateTokenDayData(token: Token, event: ethereum.Event): TokenDa
 
   let tokenDayData = TokenDayData.load(tokenDayID)
 
-  if (token.derivedNativeCurrency === null) {
-    log.error('token derivedNativeCurrency not found', [])
+  const derivedNativeCurrency = token.derivedNativeCurrency
+  if (derivedNativeCurrency === null) {
+    log.error('derivedNativeCurrency not found', [])
     return null
   }
   if (tokenDayData === null) {
     tokenDayData = new TokenDayData(tokenDayID)
     tokenDayData.date = dayStartTimestamp
     tokenDayData.token = token.id
-    tokenDayData.priceUSD = token.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
+    tokenDayData.priceUSD = derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
     tokenDayData.dailyVolumeToken = ZERO_BD
     tokenDayData.dailyVolumeNativeCurrency = ZERO_BD
     tokenDayData.dailyVolumeUSD = ZERO_BD
     tokenDayData.dailyTxns = ZERO_BI
     tokenDayData.totalLiquidityUSD = ZERO_BD
   }
-  tokenDayData.priceUSD = token.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
+  tokenDayData.priceUSD = derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
   tokenDayData.totalLiquidityToken = token.totalLiquidity
-  tokenDayData.totalLiquidityNativeCurrency = token.totalLiquidity.times(token.derivedNativeCurrency as BigDecimal)
+  tokenDayData.totalLiquidityNativeCurrency = token.totalLiquidity.times(derivedNativeCurrency as BigDecimal)
   tokenDayData.totalLiquidityUSD = tokenDayData.totalLiquidityNativeCurrency.times(bundle.nativeCurrencyPrice)
   tokenDayData.dailyTxns = tokenDayData.dailyTxns.plus(ONE_BI)
   tokenDayData.save()

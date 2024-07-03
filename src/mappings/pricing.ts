@@ -113,12 +113,21 @@ export function getTrackedVolumeUSD(
     log.error('Bundle not found', [])
     return null
   }
-  if (token1.derivedNativeCurrency === null || token0.derivedNativeCurrency === null) {
-    log.error('token derivedNativeCurrency not found', [])
-    return null
+  if (!token0 || !token1) {
+    log.error('token not found', [])
+    return ZERO_BD
   }
-  let price0 = token0.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
-  let price1 = token1.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
+
+  let derivedNativeCurrency0 = token0.derivedNativeCurrency
+  let derivedNativeCurrency1 = token1.derivedNativeCurrency
+
+  if (!derivedNativeCurrency0 || !derivedNativeCurrency1) {
+    log.error('token derivedNativeCurrency not found', [])
+    return ZERO_BD
+  }
+
+  let price0 = derivedNativeCurrency0.times(bundle.nativeCurrencyPrice)
+  let price1 = derivedNativeCurrency1.times(bundle.nativeCurrencyPrice)
 
   let whitelist = getLiquidityTrackingTokenAddresses()
   // if less than 5 LPs, require high minimum reserve amount amount or return 0
@@ -175,18 +184,28 @@ export function getTrackedLiquidityUSD(
   token0: Token,
   tokenAmount1: BigDecimal,
   token1: Token
-): BigDecimal | null {
+): BigDecimal {
   let bundle = Bundle.load('1')
-  if (bundle === null) {
-    log.error('Bundle not found', [])
-    return null
+  if (!bundle || !bundle.nativeCurrencyPrice) {
+    log.error('Bundle not found or nativeCurrencyPrice is null', [])
+    return ZERO_BD
   }
-  if (token1.derivedNativeCurrency === null || token0.derivedNativeCurrency === null) {
+
+  if (!token0 || !token1) {
+    log.error('token not found', [])
+    return ZERO_BD
+  }
+
+  let derivedNativeCurrency0 = token0.derivedNativeCurrency
+  let derivedNativeCurrency1 = token1.derivedNativeCurrency
+
+  if (!derivedNativeCurrency0 || !derivedNativeCurrency1) {
     log.error('token derivedNativeCurrency not found', [])
-    return null
+    return ZERO_BD
   }
-  let price0 = token0.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
-  let price1 = token1.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
+
+  let price0 = derivedNativeCurrency0.times(bundle.nativeCurrencyPrice)
+  let price1 = derivedNativeCurrency1.times(bundle.nativeCurrencyPrice)
 
   let whitelist = getLiquidityTrackingTokenAddresses()
   // both are whitelist tokens, take average of both amounts

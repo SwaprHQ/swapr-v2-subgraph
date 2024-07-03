@@ -220,16 +220,27 @@ export function createLiquiditySnapshot(position: LiquidityPosition, event: ethe
   let token0PriceUSD = BigDecimal.fromString('0')
   let token1PriceUSD = BigDecimal.fromString('0')
 
-  if (token0 != null && bundle != null && token0.derivedNativeCurrency != null && bundle.nativeCurrencyPrice != null) {
-    token0PriceUSD = token0.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
+  if (
+    token0 !== null &&
+    bundle !== null &&
+    token0.derivedNativeCurrency !== null &&
+    bundle.nativeCurrencyPrice !== null
+  ) {
+    token0PriceUSD = (token0.derivedNativeCurrency as BigDecimal).times(bundle.nativeCurrencyPrice as BigDecimal)
   }
 
-  if (token1 != null && bundle != null && token1.derivedNativeCurrency != null && bundle.nativeCurrencyPrice != null) {
-    token1PriceUSD = token1.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
+  if (
+    token1 !== null &&
+    bundle !== null &&
+    token1.derivedNativeCurrency !== null &&
+    bundle.nativeCurrencyPrice !== null
+  ) {
+    token1PriceUSD = (token1.derivedNativeCurrency as BigDecimal).times(bundle.nativeCurrencyPrice as BigDecimal)
   }
 
   // create new snapshot
-  let snapshot = new LiquidityPositionSnapshot(position.id.concat(timestamp.toString()))
+  let snapshotId = position.id.concat(timestamp.toString())
+  let snapshot = new LiquidityPositionSnapshot(snapshotId)
   snapshot.liquidityPosition = position.id
   snapshot.timestamp = timestamp
   snapshot.block = event.block.number.toI32()
@@ -254,7 +265,7 @@ export function createLiquidityMiningSnapshot(
   let bundle = Bundle.load('1')
   let pair = Pair.load(position.targetedPair)
 
-  if (pair == null) {
+  if (!pair) {
     log.error('Pair not found for position {}', [position.targetedPair])
     return
   }
@@ -265,12 +276,22 @@ export function createLiquidityMiningSnapshot(
   let token0PriceUSD = BigDecimal.fromString('0')
   let token1PriceUSD = BigDecimal.fromString('0')
 
-  if (token0 != null && bundle != null && token0.derivedNativeCurrency != null && bundle.nativeCurrencyPrice != null) {
-    token0PriceUSD = token0.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
+  if (token0 && bundle && token0.derivedNativeCurrency && bundle.nativeCurrencyPrice) {
+    let derivedNativeCurrency = token0.derivedNativeCurrency
+    let nativeCurrencyPrice = bundle.nativeCurrencyPrice
+
+    if (derivedNativeCurrency && nativeCurrencyPrice) {
+      token0PriceUSD = derivedNativeCurrency.times(nativeCurrencyPrice)
+    }
   }
 
-  if (token1 != null && bundle != null && token1.derivedNativeCurrency != null && bundle.nativeCurrencyPrice != null) {
-    token1PriceUSD = token1.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
+  if (token1 && bundle && token1.derivedNativeCurrency && bundle.nativeCurrencyPrice) {
+    let derivedNativeCurrency = token1.derivedNativeCurrency
+    let nativeCurrencyPrice = bundle.nativeCurrencyPrice
+
+    if (derivedNativeCurrency && nativeCurrencyPrice) {
+      token1PriceUSD = derivedNativeCurrency.times(nativeCurrencyPrice)
+    }
   }
 
   // create new snapshot
