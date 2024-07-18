@@ -129,12 +129,12 @@ export function fetchTokenName(tokenAddress: Address): string {
 
 export function fetchTokenTotalSupply(tokenAddress: Address): BigInt {
   let contract = ERC20.bind(tokenAddress)
-  let totalSupplyValue = null
+  let totalSupplyValue: BigInt | null = null
   let totalSupplyResult = contract.try_totalSupply()
   if (!totalSupplyResult.reverted) {
-    totalSupplyValue = totalSupplyResult as i32
+    totalSupplyValue = totalSupplyResult.value
   }
-  return BigInt.fromI32(totalSupplyValue as i32)
+  return totalSupplyValue as BigInt
 }
 
 export function fetchTokenDecimals(tokenAddress: Address): BigInt {
@@ -145,12 +145,12 @@ export function fetchTokenDecimals(tokenAddress: Address): BigInt {
 
   let contract = ERC20.bind(tokenAddress)
   // try types uint8 for decimals
-  let decimalValue = null
+  let decimalValue: BigInt | null = null
   let decimalResult = contract.try_decimals()
   if (!decimalResult.reverted) {
-    decimalValue = decimalResult.value
+    decimalValue = BigInt.fromI32(decimalResult.value)
   }
-  return BigInt.fromI32(decimalValue as i32)
+  return decimalValue as BigInt
 }
 
 export function createLiquidityPosition(exchange: Address, user: Address): LiquidityPosition {
@@ -159,8 +159,17 @@ export function createLiquidityPosition(exchange: Address, user: Address): Liqui
     .concat('-')
     .concat(user.toHexString())
   let liquidityTokenBalance = LiquidityPosition.load(id)
-  if (liquidityTokenBalance === null) {
+  if (liquidityTokenBalance == null) {
     let pair = Pair.load(exchange.toHexString())
+    if (pair == null) {
+      log.error('Pair not found for exchange {}', [exchange.toHexString()])
+      let newPosition = new LiquidityPosition(id)
+      newPosition.liquidityTokenBalance = ZERO_BD
+      newPosition.pair = exchange.toHexString()
+      newPosition.user = user.toHexString()
+      newPosition.save()
+      return newPosition
+    }
     pair.liquidityProviderCount = pair.liquidityProviderCount.plus(ONE_BI)
     liquidityTokenBalance = new LiquidityPosition(id)
     liquidityTokenBalance.liquidityTokenBalance = ZERO_BD
@@ -169,10 +178,19 @@ export function createLiquidityPosition(exchange: Address, user: Address): Liqui
     liquidityTokenBalance.save()
     pair.save()
   }
-  if (liquidityTokenBalance === null) log.error('LiquidityTokenBalance is null', [id])
-  return liquidityTokenBalance as LiquidityPosition
-}
 
+  if (liquidityTokenBalance == null) {
+    log.error('LiquidityTokenBalance is null', [id])
+    let newPosition = new LiquidityPosition(id)
+    newPosition.liquidityTokenBalance = ZERO_BD
+    newPosition.pair = exchange.toHexString()
+    newPosition.user = user.toHexString()
+    newPosition.save()
+    return newPosition
+  }
+
+  return liquidityTokenBalance
+}
 export function getOrCreateLiquidityMiningPosition(
   campaign: LiquidityMiningCampaign,
   pair: Pair,
@@ -204,24 +222,51 @@ export function createLiquiditySnapshot(position: LiquidityPosition, event: ethe
   let timestamp = event.block.timestamp.toI32()
   let bundle = Bundle.load('1')
   let pair = Pair.load(position.pair)
+
+  if (pair == null) {
+    log.error('Pair not found for position {}', [position.pair])
+    return
+  }
+
   let token0 = Token.load(pair.token0)
   let token1 = Token.load(pair.token1)
 
+  let token0PriceUSD = BigDecimal.fromString('0')
+  let token1PriceUSD = BigDecimal.fromString('0')
+
+  if (
+    token0 !== null &&
+    bundle !== null &&
+    token0.derivedNativeCurrency !== null &&
+    bundle.nativeCurrencyPrice !== null
+  ) {
+    token0PriceUSD = (token0.derivedNativeCurrency as BigDecimal).times(bundle.nativeCurrencyPrice as BigDecimal)
+  }
+
+  if (
+    token1 !== null &&
+    bundle !== null &&
+    token1.derivedNativeCurrency !== null &&
+    bundle.nativeCurrencyPrice !== null
+  ) {
+    token1PriceUSD = (token1.derivedNativeCurrency as BigDecimal).times(bundle.nativeCurrencyPrice as BigDecimal)
+  }
+
   // create new snapshot
-  let snapshot = new LiquidityPositionSnapshot(position.id.concat(timestamp.toString()))
+  let snapshotId = position.id.concat(timestamp.toString())
+  let snapshot = new LiquidityPositionSnapshot(snapshotId)
   snapshot.liquidityPosition = position.id
   snapshot.timestamp = timestamp
   snapshot.block = event.block.number.toI32()
   snapshot.user = position.user
   snapshot.pair = position.pair
-  snapshot.token0PriceUSD = token0.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
-  snapshot.token1PriceUSD = token1.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
+  snapshot.token0PriceUSD = token0PriceUSD
+  snapshot.token1PriceUSD = token1PriceUSD
   snapshot.reserve0 = pair.reserve0
   snapshot.reserve1 = pair.reserve1
   snapshot.reserveUSD = pair.reserveUSD
   snapshot.liquidityTokenTotalSupply = pair.totalSupply
   snapshot.liquidityTokenBalance = position.liquidityTokenBalance
-  snapshot.liquidityPosition = position.id
   snapshot.save()
 }
 
@@ -233,8 +278,35 @@ export function createLiquidityMiningSnapshot(
   let timestamp = event.block.timestamp.toI32()
   let bundle = Bundle.load('1')
   let pair = Pair.load(position.targetedPair)
+
+  if (!pair) {
+    log.error('Pair not found for position {}', [position.targetedPair])
+    return
+  }
+
   let token0 = Token.load(pair.token0)
   let token1 = Token.load(pair.token1)
+
+  let token0PriceUSD = BigDecimal.fromString('0')
+  let token1PriceUSD = BigDecimal.fromString('0')
+
+  if (token0 && bundle && token0.derivedNativeCurrency && bundle.nativeCurrencyPrice) {
+    let derivedNativeCurrency = token0.derivedNativeCurrency
+    let nativeCurrencyPrice = bundle.nativeCurrencyPrice
+
+    if (derivedNativeCurrency && nativeCurrencyPrice) {
+      token0PriceUSD = derivedNativeCurrency.times(nativeCurrencyPrice)
+    }
+  }
+
+  if (token1 && bundle && token1.derivedNativeCurrency && bundle.nativeCurrencyPrice) {
+    let derivedNativeCurrency = token1.derivedNativeCurrency
+    let nativeCurrencyPrice = bundle.nativeCurrencyPrice
+
+    if (derivedNativeCurrency && nativeCurrencyPrice) {
+      token1PriceUSD = derivedNativeCurrency.times(nativeCurrencyPrice)
+    }
+  }
 
   // create new snapshot
   let snapshot = new LiquidityMiningPositionSnapshot(position.id.concat(timestamp.toString()))
@@ -244,8 +316,8 @@ export function createLiquidityMiningSnapshot(
   snapshot.block = event.block.number.toI32()
   snapshot.user = position.user
   snapshot.pair = position.targetedPair
-  snapshot.token0PriceUSD = token0.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
-  snapshot.token1PriceUSD = token1.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
+  snapshot.token0PriceUSD = token0PriceUSD
+  snapshot.token1PriceUSD = token1PriceUSD
   snapshot.reserve0 = pair.reserve0
   snapshot.reserve1 = pair.reserve1
   snapshot.reserveUSD = pair.reserveUSD

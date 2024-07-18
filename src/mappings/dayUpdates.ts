@@ -1,11 +1,11 @@
 import { PairHourData } from './../types/schema'
 /* eslint-disable prefer-const */
-import { BigInt, BigDecimal, ethereum } from '@graphprotocol/graph-ts'
+import { BigInt, BigDecimal, ethereum, log } from '@graphprotocol/graph-ts'
 import { Pair, Bundle, Token, SwaprFactory, SwaprDayData, PairDayData, TokenDayData } from '../types/schema'
 import { ONE_BI, ZERO_BD, ZERO_BI } from './helpers'
 import { getFactoryAddress } from '../commons/addresses'
 
-export function updateSwaprDayData(event: ethereum.Event): SwaprDayData {
+export function updateSwaprDayData(event: ethereum.Event): SwaprDayData | null {
   let swapr = SwaprFactory.load(getFactoryAddress())
   let timestamp = event.block.timestamp.toI32()
   let dayID = timestamp / 86400
@@ -21,6 +21,11 @@ export function updateSwaprDayData(event: ethereum.Event): SwaprDayData {
     swaprDayData.dailyVolumeUntracked = ZERO_BD
   }
 
+  if (swapr === null) {
+    log.error('swapr not found', [])
+    return null
+  }
+
   swaprDayData.totalLiquidityUSD = swapr.totalLiquidityUSD
   swaprDayData.totalLiquidityNativeCurrency = swapr.totalLiquidityNativeCurrency
   swaprDayData.txCount = swapr.txCount
@@ -29,7 +34,7 @@ export function updateSwaprDayData(event: ethereum.Event): SwaprDayData {
   return swaprDayData as SwaprDayData
 }
 
-export function updatePairDayData(event: ethereum.Event): PairDayData {
+export function updatePairDayData(event: ethereum.Event): PairDayData | null {
   let timestamp = event.block.timestamp.toI32()
   let dayID = timestamp / 86400
   let dayStartTimestamp = dayID * 86400
@@ -38,6 +43,10 @@ export function updatePairDayData(event: ethereum.Event): PairDayData {
     .concat('-')
     .concat(BigInt.fromI32(dayID).toString())
   let pair = Pair.load(event.address.toHexString())
+  if (pair === null) {
+    log.error('Pair not found for address {}', [event.address.toHex()])
+    return null
+  }
   let pairDayData = PairDayData.load(dayPairID)
   if (pairDayData === null) {
     pairDayData = new PairDayData(dayPairID)
@@ -61,7 +70,7 @@ export function updatePairDayData(event: ethereum.Event): PairDayData {
   return pairDayData as PairDayData
 }
 
-export function updatePairHourData(event: ethereum.Event): PairHourData {
+export function updatePairHourData(event: ethereum.Event): PairHourData | null {
   let timestamp = event.block.timestamp.toI32()
   let hourIndex = timestamp / 3600 // get unique hour within unix history
   let hourStartUnix = hourIndex * 3600 // want the rounded effect
@@ -80,7 +89,10 @@ export function updatePairHourData(event: ethereum.Event): PairHourData {
     pairHourData.hourlyVolumeUSD = ZERO_BD
     pairHourData.hourlyTxns = ZERO_BI
   }
-
+  if (pair === null) {
+    log.error('Pair not found for address {}', [event.address.toHex()])
+    return null
+  }
   pairHourData.reserve0 = pair.reserve0
   pairHourData.reserve1 = pair.reserve1
   pairHourData.reserveUSD = pair.reserveUSD
@@ -90,8 +102,12 @@ export function updatePairHourData(event: ethereum.Event): PairHourData {
   return pairHourData as PairHourData
 }
 
-export function updateTokenDayData(token: Token, event: ethereum.Event): TokenDayData {
+export function updateTokenDayData(token: Token, event: ethereum.Event): TokenDayData | null {
   let bundle = Bundle.load('1')
+  if (bundle === null) {
+    log.error('Bundle not found', [])
+    return null
+  }
   let timestamp = event.block.timestamp.toI32()
   let dayID = timestamp / 86400
   let dayStartTimestamp = dayID * 86400
@@ -101,20 +117,26 @@ export function updateTokenDayData(token: Token, event: ethereum.Event): TokenDa
     .concat(BigInt.fromI32(dayID).toString())
 
   let tokenDayData = TokenDayData.load(tokenDayID)
+
+  const derivedNativeCurrency = token.derivedNativeCurrency
+  if (derivedNativeCurrency === null) {
+    log.error('derivedNativeCurrency not found', [])
+    return null
+  }
   if (tokenDayData === null) {
     tokenDayData = new TokenDayData(tokenDayID)
     tokenDayData.date = dayStartTimestamp
     tokenDayData.token = token.id
-    tokenDayData.priceUSD = token.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
+    tokenDayData.priceUSD = derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
     tokenDayData.dailyVolumeToken = ZERO_BD
     tokenDayData.dailyVolumeNativeCurrency = ZERO_BD
     tokenDayData.dailyVolumeUSD = ZERO_BD
     tokenDayData.dailyTxns = ZERO_BI
     tokenDayData.totalLiquidityUSD = ZERO_BD
   }
-  tokenDayData.priceUSD = token.derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
+  tokenDayData.priceUSD = derivedNativeCurrency.times(bundle.nativeCurrencyPrice)
   tokenDayData.totalLiquidityToken = token.totalLiquidity
-  tokenDayData.totalLiquidityNativeCurrency = token.totalLiquidity.times(token.derivedNativeCurrency as BigDecimal)
+  tokenDayData.totalLiquidityNativeCurrency = token.totalLiquidity.times(derivedNativeCurrency as BigDecimal)
   tokenDayData.totalLiquidityUSD = tokenDayData.totalLiquidityNativeCurrency.times(bundle.nativeCurrencyPrice)
   tokenDayData.dailyTxns = tokenDayData.dailyTxns.plus(ONE_BI)
   tokenDayData.save()
